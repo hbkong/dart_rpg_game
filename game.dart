@@ -7,8 +7,9 @@ class Game {
   late Character character;
   List<Monster> monsters = [];
   int defeatedMonsters = 0;
+  bool isTestMode;
   
-  Game() {
+  Game({this.isTestMode = false}) {
     // 게임 초기화
     loadCharacterStats();
     loadMonsterStats();
@@ -50,7 +51,9 @@ class Game {
         
         // 다음 몬스터와 대결할지 선택
         print('다음 몬스터와 싸우시겠습니까? (y/n):');
-        final answer = stdin.readLineSync()?.toLowerCase() ?? 'n';
+        final answer = isTestMode 
+            ? 'y' // 테스트 환경에서는 항상 계속 진행
+            : stdin.readLineSync()?.toLowerCase() ?? 'n';
         if (answer != 'y') {
           print('게임을 종료합니다.');
           saveGameResult(true);
@@ -67,6 +70,15 @@ class Game {
   
   // 스탯 포인트 분배 메서드
   void distributeStatPoints() {
+    // 테스트 환경에서는 자동으로 처리
+    if (isTestMode) {
+      if (character.statPoints > 0) {
+        // 테스트에서는 체력에 모든 포인트 할당
+        character.distributeStatPoints('체력', character.statPoints);
+      }
+      return;
+    }
+    
     print('\n스탯 포인트를 분배하시겠습니까? (y/n):');
     final answer = stdin.readLineSync()?.toLowerCase() ?? 'n';
     
@@ -139,13 +151,20 @@ class Game {
       monster.showStatus();
       
       print('${character.name}의 턴');
-      // 아이템 사용 옵션 추가
-      String actionPrompt = character.hasUsedItem 
-          ? '행동을 선택하세요 (1: 공격, 2: 방어):'
-          : '행동을 선택하세요 (1: 공격, 2: 방어, 3: 아이템 사용):';
-      print(actionPrompt);
       
-      final action = stdin.readLineSync();
+      // 테스트 환경에서는 자동으로 공격 선택
+      String? action;
+      if (isTestMode) {
+        action = '1'; // 항상 공격 선택
+      } else {
+        // 아이템 사용 옵션 추가
+        String actionPrompt = character.hasUsedItem 
+            ? '행동을 선택하세요 (1: 공격, 2: 방어):'
+            : '행동을 선택하세요 (1: 공격, 2: 방어, 3: 아이템 사용):';
+        print(actionPrompt);
+        
+        action = stdin.readLineSync();
+      }
       
       if (action == '1') {
         // 공격
@@ -206,7 +225,9 @@ class Game {
         // 파일이 없으면 기본값으로 생성
         Directory('data').createSync(recursive: true);
         file.writeAsStringSync('50,10,5');
-        print('data/characters.txt 파일이 없어 기본값으로 생성했습니다.');
+        if (!isTestMode) {
+          print('data/characters.txt 파일이 없어 기본값으로 생성했습니다.');
+        }
       }
       
       final contents = file.readAsStringSync();
@@ -245,14 +266,21 @@ class Game {
         
         if (matchingData != null) {
           print('저장된 "$name" 캐릭터 데이터가 있습니다. 불러오시겠습니까? (y/n):');
-          final answer = stdin.readLineSync()?.toLowerCase() ?? 'n';
+          
+          // 테스트 환경에서는 자동으로 'y' 선택
+          final answer = isTestMode 
+              ? 'y' 
+              : stdin.readLineSync()?.toLowerCase() ?? 'n';
           
           if (answer == 'y') {
             character.loadFromString(matchingData);
             print('저장된 캐릭터 데이터를 불러왔습니다.');
           }
         } else {
-          print('저장된 "$name" 캐릭터 데이터가 없습니다. 새로운 캐릭터로 시작합니다.');
+          // 테스트 모드에서는 메시지 출력 생략
+          if (!isTestMode) {
+            print('저장된 "$name" 캐릭터 데이터가 없습니다. 새로운 캐릭터로 시작합니다.');
+          }
         }
       }
       
@@ -270,7 +298,9 @@ class Game {
         // 파일이 없으면 기본값으로 생성
         Directory('data').createSync(recursive: true);
         file.writeAsStringSync('Batman,30,20\nSpiderman,20,30\nSuperman,30,10');
-        print('data/monsters.txt 파일이 없어 기본값으로 생성했습니다.');
+        if (!isTestMode) {
+          print('data/monsters.txt 파일이 없어 기본값으로 생성했습니다.');
+        }
       }
       
       final contents = file.readAsStringSync();
@@ -281,7 +311,9 @@ class Game {
         
         final stats = line.split(',');
         if (stats.length != 3) {
-          print('잘못된 몬스터 데이터 형식입니다: $line');
+          if (!isTestMode) {
+            print('잘못된 몬스터 데이터 형식입니다: $line');
+          }
           continue;
         }
         
@@ -304,6 +336,11 @@ class Game {
   }
   
   String getCharacterName() {
+    // 테스트 환경에서는 기본 이름 반환
+    if (isTestMode) {
+      return 'TestCharacter';
+    }
+    
     String? name;
     final nameRegex = RegExp(r'^[a-zA-Z가-힣]+$');
     
@@ -322,10 +359,16 @@ class Game {
   }
   
   void saveGameResult(bool isVictory) {
-    print('결과를 저장하시겠습니까? (y/n)');
-    final answer = stdin.readLineSync()?.toLowerCase() ?? 'n';
+    // 테스트 환경에서는 자동으로 저장
+    bool shouldSave = isTestMode ? true : false;
     
-    if (answer == 'y') {
+    if (!shouldSave) {
+      print('결과를 저장하시겠습니까? (y/n)');
+      final answer = stdin.readLineSync()?.toLowerCase() ?? 'n';
+      shouldSave = answer == 'y';
+    }
+    
+    if (shouldSave) {
       try {
         // 게임 결과 저장
         final resultFile = File('data/result.txt');
@@ -345,7 +388,9 @@ class Game {
           resultFile.writeAsStringSync(newContent);
         }
         
-        print('게임 결과가 data/result.txt 파일에 추가되었습니다.');
+        if (!isTestMode) {
+          print('게임 결과가 data/result.txt 파일에 추가되었습니다.');
+        }
         
         // 캐릭터 데이터 저장
         final saveFile = File('data/character_save.txt');
@@ -372,7 +417,9 @@ class Game {
         final updatedSaveData = savedCharacters.values.join('\n');
         saveFile.writeAsStringSync(updatedSaveData);
         
-        print('캐릭터 데이터가 저장되었습니다.');
+        if (!isTestMode) {
+          print('캐릭터 데이터가 저장되었습니다.');
+        }
         
       } catch (e) {
         print('게임 결과를 저장하는 데 실패했습니다: $e');
